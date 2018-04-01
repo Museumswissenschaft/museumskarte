@@ -1,0 +1,126 @@
+<html>
+<head>
+	<title>Karte aller Museen in Deutschland - Heatmap, Cluster und Links</title>
+
+	<meta charset="utf-8">
+
+    <!-- Latest compiled and minified CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+
+    <!-- Optional theme -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css" integrity="sha384-fLW2N01lMqjakBkx3l/M9EahuwpSfeNvV63J5ezn3uZzapT0u7EYsXMjQV+0En5r" crossorigin="anonymous">
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.2.4/jquery.min.js"></script>
+
+    <!-- Latest compiled and minified JavaScript -->
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.2.0/dist/leaflet.css"   integrity="sha512-M2wvCLH6DSRazYeZRIm1JnYyh22purTM+FDB5CsyxtQJYeKq83arPe5wgbNmcFXGqiSH2XR8dT/fJISVA1r/zQ==" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.2.0/dist/leaflet.js"   integrity="sha512-lInM/apFSqyy1o6s89K4iQUKg6ppXEgsVxT35HbzUupEVRh2Eu9Wdl4tHj7dZO0s1uvplcYGmt3498TtHq+log==" crossorigin=""></script>
+
+    <!-- heatmap -->
+    <script src="js/webgl-heatmap.js"></script>
+    <script src="js/leaflet-webgl-heatmap.min.js"></script>
+
+    <!-- markercluster -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.1.0/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.1.0/dist/MarkerCluster.Default.css" />
+    <script src="https://unpkg.com/leaflet.markercluster@1.1.0/dist/leaflet.markercluster.js"></script>
+
+    <style>
+        .marker-cluster div {
+            background-color: white;
+        }
+
+        .marker-cluster-small {
+            background-color: grey;
+        }
+
+        .marker-cluster-medium {
+            background-color: darkgrey;
+        }
+
+        .marker-cluster-large {
+            background-color: dimgrey;
+        }
+    </style>
+</head>
+
+<body>
+<div id="map" style="height: 100%"></div>
+
+<script type="text/javascript">
+    var iconCreateFunction = function (cluster) {
+        var childCount = cluster.getChildCount();
+
+        var c = ' marker-cluster-';
+        if (childCount < 10) {
+            c += 'small';
+        } else if (childCount < 100) {
+            c += 'medium';
+        } else {
+            c += 'large';
+        }
+
+        return new L.DivIcon({ html: '<div><span>' + childCount + '</span></div>', className: 'marker-cluster' + c, iconSize: new L.Point(40, 40) });
+    };
+
+	$( document ).ready(function() {
+        var markers = L.markerClusterGroup({
+            removeOutsideVisibleBounds: true,
+            iconCreateFunction: iconCreateFunction,
+            maxClusterRadius: 160
+        });
+
+        var heatmap = new L.webGLHeatmap({size: 100000, autoresize: true, alphaRange: 0.1, opacity: 0.5});
+        var heatmapPoints = [];
+
+		$.getJSON( "museums.json", function( data ) {
+		    for (var key in data) {
+                var museum = data[key];
+                var geocoding = museum['gps'];
+                var coordinates = [geocoding['lat'], geocoding['lng']];
+
+                // generate search url
+                var query = museum['name'];
+                if (query.indexOf(museum['city']) == -1) {
+                    query += ' ' + museum['city']
+                }
+
+                var url = 'https://www.google.de/search?q=' + encodeURIComponent(query);
+                if (museum['url']) {
+                    url = museum['url'];
+                }
+                var popupContent = '<a href="' + url + '" target="_blank">' + museum['name'] + '</a>';
+
+                L.marker(coordinates)
+                    .bindPopup(popupContent)
+                    .addTo(markers);
+
+                heatmapPoints.push([coordinates[0], coordinates[1]])
+            }
+		});
+
+        heatmap.setData(heatmapPoints);
+        heatmap.multiply(0.07);
+
+        var map = L.map('map', {'layers': [markers], 'maxZoom': 17});
+
+        var center_coordinates = [51, 10.5];
+        map.setView(center_coordinates, 7);
+
+        CartoDB_Positron = L.tileLayer('http://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="http://cartodb.com/attributions">CartoDB</a>',
+            subdomains: 'abcd',
+            maxZoom: 17
+        }).addTo(map);
+
+        L.control.layers({
+			'Marker': markers,
+            'Heatmap': heatmap
+		}, {}).addTo(map);
+	});
+</script>
+</body>
+</html>
